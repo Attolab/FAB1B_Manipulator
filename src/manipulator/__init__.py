@@ -1,9 +1,9 @@
 from pathlib import Path
 
 
-NICE_NAME = 'MyExtension'
-module_name = 'extension'
-klass_name = 'MyExtension'
+NICE_NAME = 'XY Manipulator'
+module_name = 'manipulator'
+klass_name = 'Manipulator'
 
 
 # ############

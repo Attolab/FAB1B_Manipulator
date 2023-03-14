@@ -5,19 +5,19 @@ from pyqtgraph.parametertree import Parameter, ParameterTree
 from pymodaq.daq_utils.parameter import utils as putils
 import pymodaq.daq_utils.parameter.pymodaq_ptypes as pymodaq_ptypes
 
-from pymodaq.daq_utils.scanner import TableModelTabular
-
 from qtpy import QtWidgets, QtCore
 
 from PyQt5 import uic
 import pyqtgraph as pg
-import icons_resources
+
 import keyboard
-import os
+import sys, os
 import pandas as pd
 import numpy as np
 
-from pymodaq.daq_utils.config import get_set_local_dir, get_set_config_path
+from pymodaq.daq_utils.config import get_set_config_path
+
+from manipulator import icons_resources
 
 config = utils.load_config()
 logger = utils.set_logger(utils.get_module_name(__file__))
@@ -60,12 +60,12 @@ class TableModelPosition(gutils.TableModel):
 class Manipulator_Interface(QtWidgets.QWidget):
     def __init__(self):
         super(Manipulator_Interface, self).__init__()
-        uic.loadUi('manipulator.ui', self)
+        uic.loadUi(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'manipulator.ui'), self)
 
 class New_Position_Dialog(QtWidgets.QWidget):
     def __init__(self):
         super(New_Position_Dialog, self).__init__()
-        uic.loadUi('new_position_dialog.ui', self)
+        uic.loadUi(os.path.join(os.path.dirname(os.path.abspath(__file__)),'new_position_dialog.ui'), self)
         self.pushButton_2.clicked.connect(self.hide)
 
 
