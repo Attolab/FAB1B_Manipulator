@@ -389,23 +389,23 @@ class Manipulator(gutils.CustomApp):
     def move_manipulator(self, direction, step):
         actuators = self.modules_manager.actuators
         if self.current_keyboard_stage == 1:
-            idx = 0
-            idy = 1
+            idx = 'X1'
+            idy = 'Y1'
         elif self.current_keyboard_stage == 2:
-            idx = 2
-            idy = 3
+            idx = 'X2'
+            idy = 'Y2'
 
         if len(actuators) == 0:
             popup_message('No actuator', 'Select XY actuators first!')
         else:
             if direction == 'right':
-                actuators[idx].move_Rel(step)
+                next((actuator for actuator in actuators if actuator.title == idx)).move_Rel(step)
             elif direction == 'left':
-                actuators[idx].move_Rel(-step)
+                next((actuator for actuator in actuators if actuator.title == idx)).move_Rel(-step)
             elif direction == 'up':
-                actuators[idy].move_Rel(step)
+                next((actuator for actuator in actuators if actuator.title == idy)).move_Rel(step)
             elif direction == 'down':
-                actuators[idy].move_Rel(-step)
+                next((actuator for actuator in actuators if actuator.title == idy)).move_Rel(-step)
 
     def move_manipulator_abs(self, x1, y1, x2, y2, name):
 
@@ -417,10 +417,10 @@ class Manipulator(gutils.CustomApp):
             if len(actuators) == 0:
                 popup_message('No actuator', 'Select XY actuators first!')
             else:
-                actuators[0].move_Abs(x1)
-                actuators[1].move_Abs(y1)
-                actuators[2].move_Abs(x2)
-                actuators[3].move_Abs(y2)
+                next((actuator for actuator in actuators if actuator.title == 'X1')).move_Abs(x1)
+                next((actuator for actuator in actuators if actuator.title == 'Y1')).move_Abs(y1)
+                next((actuator for actuator in actuators if actuator.title == 'X2')).move_Abs(x2)
+                next((actuator for actuator in actuators if actuator.title == 'Y2')).move_Abs(y2)
 
     def manual_move(self):
         x1 = self.x1_pos.value()
@@ -432,10 +432,10 @@ class Manipulator(gutils.CustomApp):
         if len(actuators) == 0:
             popup_message('No actuator', 'Select XY actuators first!')
         else:
-            actuators[0].move_Abs(x1)
-            actuators[1].move_Abs(y1)
-            actuators[2].move_Abs(x1)
-            actuators[3].move_Abs(y2)
+            next((actuator for actuator in actuators if actuator.title == 'X1')).move_Abs(x1)
+            next((actuator for actuator in actuators if actuator.title == 'Y1')).move_Abs(y1)
+            next((actuator for actuator in actuators if actuator.title == 'X2')).move_Abs(x2)
+            next((actuator for actuator in actuators if actuator.title == 'Y2')).move_Abs(y2)
 
     def change_refresh_time(self, time):
         self.killTimer(self.timerPos)
@@ -455,16 +455,16 @@ class Manipulator(gutils.CustomApp):
         """
         actuators = self.modules_manager.actuators
         if len(actuators) > 0:
-            x = actuators[0].current_position
+            x = next((actuator for actuator in actuators if actuator.title == 'X1')).current_position
             self.x1_pos.setValue(x)
         if len(actuators) > 1:
-            y = actuators[1].current_position
+            y = next((actuator for actuator in actuators if actuator.title == 'Y1')).current_position
             self.y1_pos.setValue(y)
         if len(actuators) > 2:
-            x2 = actuators[2].current_position
+            x2 = next((actuator for actuator in actuators if actuator.title == 'X2')).current_position
             self.x2_pos.setValue(x2)
         if len(actuators) > 3:
-            y2 = actuators[3].current_position
+            y2 = next((actuator for actuator in actuators if actuator.title == 'Y2')).current_position
             self.y2_pos.setValue(y2)
 
         self.spots[0]['pos'] = [x, y]
