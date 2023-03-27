@@ -17,7 +17,10 @@ import numpy as np
 
 from pymodaq.daq_utils.config import get_set_config_path
 
-from manipulator import icons_resources
+try:
+    from manipulator import icons_resources
+except ImportError:
+    import icons_resources
 
 config = utils.load_config()
 logger = utils.set_logger(utils.get_module_name(__file__))
@@ -110,7 +113,7 @@ class Manipulator(gutils.CustomApp):
         self.position_tree = ParameterTree()
         self.position_tree.setParameters(self.positions, showTop=False)
 
-        self.table_model = TableModelPosition([['Default', 10., 12.]], ['Name', 'X', 'Y'], editable= [False, True, True])
+        self.table_model = TableModelPosition([['Default', 10., 12., 50., 40.]], ['Name', 'X1', 'Y1', 'X2', 'Y2'], editable= [False, True, True])
         self.table_view = putils.get_widget_from_tree(self.position_tree, pymodaq_ptypes.TableViewCustom)[0]
         self.positions.child('tabular_table').setValue(self.table_model)
 
@@ -122,7 +125,7 @@ class Manipulator(gutils.CustomApp):
         if files == []:
             fname = 'default.txt'
             self.position_df = pd.DataFrame(self.table_model.get_data_all())
-            self.position_df.columns = ['Name', 'X', 'Y']
+            self.position_df.columns = ['Name', 'X1', 'Y1', 'X2', 'Y2']
             self.position_df.to_csv(os.path.join(self.position_folder, fname), index=False)
 
             self.file_list.append(fname)
@@ -165,6 +168,10 @@ class Manipulator(gutils.CustomApp):
 
         self.modules_manager.settings_tree.setMinimumWidth(400)
         self.docks['modmanager'].addWidget(self.modules_manager.settings_tree)
+        default_actuators = ['X1', 'Y1', 'X2', 'Y2']
+        if all(actuator in self.modules_manager.actuators_name for actuator in default_actuators):
+            self.modules_manager.settings.child('modules', 'actuators').setValue(dict(all_items=self.modules_manager.actuators_name,
+                                                                      selected=default_actuators))
 
         # Manipulator
         #------------------------------------------
@@ -178,7 +185,9 @@ class Manipulator(gutils.CustomApp):
         self.manipulator_interface.stepsizeSpinbox_2.setValue(0)
         self.manipulator_interface.stepsizeSpinbox_5.setValue(50.8)
         self.manipulator_interface.stepsizeSpinbox_4.setValue(25.4)
-
+        self.manipulator_interface.checkBox_2.setChecked(True)
+        self.manipulator_interface.checkBox_3.setChecked(False)
+        self.current_keyboard_stage = 1
         self.manipulator_interface.stepsizeSpinbox_6.setValue(100)
 
         # Positions
@@ -217,8 +226,10 @@ class Manipulator(gutils.CustomApp):
         self.plot = pg.plot()
         n = 300
         self.scatter = pg.ScatterPlotItem(
-            size=10, brush=pg.mkBrush(255, 50, 50, 120))
-        self.spots = [{'pos': [0, 0], 'data': 'Current Position', 'size': 25, 'symbol':'+'}]
+            size=10, brush=pg.mkBrush(50, 50, 200, 200))
+        self.spots = [{'pos': [0, 0], 'data': 'Current Position 1', 'size': 25, 'symbol':'+'}]
+        self.spots.append({'pos': [1, 1], 'data': 'Current Position 2', 'size': 25, 'symbol': '+', 'brush': (50, 200, 50, 200)})
+
         self.scatter.addPoints(self.spots)
         self.scatter.sigClicked.connect(self.scatter_clicked)
         self.plot.addItem(self.scatter)
@@ -237,13 +248,17 @@ class Manipulator(gutils.CustomApp):
 
 
     def update_position_plot(self):
-        current_pos = self.spots[0]
+        current_pos1 = self.spots[0]
+        current_pos2 = self.spots[1]
+
         self.spots = []
         for position in self.table_model.get_data_all():
-            name, x, y = position
+            name, x, y, x2, y2 = position
             self.spots.append({'pos': [x, y], 'data': name, 'size': 15, 'symbol':'o', 'brush':(50,50,200,200)})
+            self.spots.append({'pos': [x2, y2], 'data': name, 'size': 15, 'symbol': 'o', 'brush': (50, 200, 50, 200)})
 
-        self.spots.insert(0, current_pos)
+        self.spots.insert(0, current_pos1)
+        self.spots.insert(1, current_pos2)
         self.scatter.setData(self.spots, hoverable=True, hoverSize = 25, tip=self.tooltip)
 
     def tooltip(self,x, y, data):
@@ -254,15 +269,16 @@ class Manipulator(gutils.CustomApp):
         y = points[0].pos()[1]
         name = points[0].data()
 
-        self.move_manipulator_abs(x, y, name)
+        # self.move_manipulator_abs(x, y, self.x2_pos.value(), self.y2_pos.value(), name)
 
     def position_table_clicked(self, index):
         if index.column() == 0:  # User double-clicked on name
             name = self.table_model.get_data(index.row(), 0)
-            x = self.table_model.get_data(index.row(), 1)
-            y = self.table_model.get_data(index.row(), 2)
-
-            self.move_manipulator_abs(x, y, name)
+            x1 = self.table_model.get_data(index.row(), 1)
+            y1 = self.table_model.get_data(index.row(), 2)
+            x2 = self.table_model.get_data(index.row(), 3)
+            y2 = self.table_model.get_data(index.row(), 4)
+            self.move_manipulator_abs(x1, y1, x2, y2, name)
 
     def setup_menu(self):
         '''
@@ -284,21 +300,25 @@ class Manipulator(gutils.CustomApp):
         self.update_position_plot()
 
         self.position_df = pd.DataFrame(self.table_model.get_data_all())
-        self.position_df.columns = ['Name', 'X', 'Y']
+        self.position_df.columns = ['Name', 'X1', 'Y1', 'X2', 'Y2']
         self.position_df.to_csv(os.path.join(self.position_folder, self.current_file), index=False)
 
     def open_new_position_dialog(self):
         self.new_position_dialog.textEdit.setText('')
-        self.new_position_dialog.stepsizeSpinbox_3.setValue(self.x_pos.value())
-        self.new_position_dialog.stepsizeSpinbox_2.setValue(self.y_pos.value())
+        self.new_position_dialog.stepsizeSpinbox_3.setValue(self.x1_pos.value())
+        self.new_position_dialog.stepsizeSpinbox_2.setValue(self.y1_pos.value())
+        self.new_position_dialog.stepsizeSpinbox_5.setValue(self.x2_pos.value())
+        self.new_position_dialog.stepsizeSpinbox_4.setValue(self.y2_pos.value())
         self.new_position_dialog.show()
 
     def create_new_position(self):
         self.new_position_dialog.hide()
         name = self.new_position_dialog.textEdit.toPlainText()
-        x = self.new_position_dialog.stepsizeSpinbox_3.value()
-        y = self.new_position_dialog.stepsizeSpinbox_2.value()
-        self.table_model.insert_data(self.table_model.rowCount(self.table_model.index(-1, -1)), [name, x, y])
+        x1 = self.new_position_dialog.stepsizeSpinbox_3.value()
+        y1 = self.new_position_dialog.stepsizeSpinbox_2.value()
+        x2 = self.new_position_dialog.stepsizeSpinbox_5.value()
+        y2 = self.new_position_dialog.stepsizeSpinbox_4.value()
+        self.table_model.insert_data(self.table_model.rowCount(self.table_model.index(-1, -1)), [name, x1, y1, x2, y2])
         self.update_saved_positions()
 
     def keyboardEventReceived(self, event):
@@ -316,11 +336,16 @@ class Manipulator(gutils.CustomApp):
                 self.move_manipulator(event.name, self.manipulator_interface.stepsizeSpinbox_3.value())
 
     def connect_things(self):
-        self.x_pos = self.manipulator_interface.doubleSpinBox
-        self.y_pos = self.manipulator_interface.doubleSpinBox_2
+        self.x1_pos = self.manipulator_interface.doubleSpinBox
+        self.y1_pos = self.manipulator_interface.doubleSpinBox_2
+        self.x2_pos = self.manipulator_interface.doubleSpinBox_3
+        self.y2_pos = self.manipulator_interface.doubleSpinBox_4
 
-        self.x_pos.editingFinished.connect(self.manual_move)
-        self.y_pos.editingFinished.connect(self.manual_move)
+        self.x1_pos.editingFinished.connect(self.manual_move)
+        self.y1_pos.editingFinished.connect(self.manual_move)
+        self.x2_pos.editingFinished.connect(self.manual_move)
+        self.y2_pos.editingFinished.connect(self.manual_move)
+
 
         self.manipulator_interface.pushButton.clicked.connect(lambda: self.move_manipulator('right', self.manipulator_interface.stepsizeSpinbox_3.value()))
         self.manipulator_interface.pushButton_4.clicked.connect(lambda: self.move_manipulator('left', self.manipulator_interface.stepsizeSpinbox_3.value()))
@@ -345,24 +370,46 @@ class Manipulator(gutils.CustomApp):
         # self.table_view.load_data_signal.connect(self.table_model.load_txt)
         # self.table_view.save_data_signal.connect(self.table_model.save_txt)
 
+        self.manipulator_interface.checkBox_2.toggled.connect(lambda: self.switch_stage(1))
+        self.manipulator_interface.checkBox_3.toggled.connect(lambda: self.switch_stage(2))
+
+
     def remove_position(self, row):
         self.table_model.remove_row(row)
         self.update_saved_positions()
 
+    def switch_stage(self, number):
+        if number == 2:
+            self.manipulator_interface.checkBox_2.setChecked(False)
+        if number == 1:
+            self.manipulator_interface.checkBox_3.setChecked(False)
+        self.current_keyboard_stage = number
+        self.plot.setFocus()    #to prevent changing the spinbox below with keyboard
+
     def move_manipulator(self, direction, step):
         actuators = self.modules_manager.actuators
-        if direction == 'right':
-            actuators[0].move_Rel(step)
-        elif direction == 'left':
-            actuators[0].move_Rel(-step)
-        elif direction == 'up':
-            actuators[1].move_Rel(step)
-        elif direction == 'down':
-            actuators[1].move_Rel(-step)
+        if self.current_keyboard_stage == 1:
+            idx = 0
+            idy = 1
+        elif self.current_keyboard_stage == 2:
+            idx = 2
+            idy = 3
 
-    def move_manipulator_abs(self, x, y, name):
+        if len(actuators) == 0:
+            popup_message('No actuator', 'Select XY actuators first!')
+        else:
+            if direction == 'right':
+                actuators[idx].move_Rel(step)
+            elif direction == 'left':
+                actuators[idx].move_Rel(-step)
+            elif direction == 'up':
+                actuators[idy].move_Rel(step)
+            elif direction == 'down':
+                actuators[idy].move_Rel(-step)
 
-        message = 'Do you want to move to \''+name+'\' position ('+str(x)+' ,'+str(y)+') ?'
+    def move_manipulator_abs(self, x1, y1, x2, y2, name):
+
+        message = 'Do you want to move to \''+name+'\' position ('+str(x1)+' ,'+str(y1)+' ,'+str(x2)+' ,'+str(y2)+') ?'
         reply = popup_message('Move confirmation', message)
 
         if reply == QtWidgets.QMessageBox.Yes:
@@ -370,18 +417,25 @@ class Manipulator(gutils.CustomApp):
             if len(actuators) == 0:
                 popup_message('No actuator', 'Select XY actuators first!')
             else:
-                actuators[0].move_Abs(x)
-                actuators[1].move_Abs(y)
+                actuators[0].move_Abs(x1)
+                actuators[1].move_Abs(y1)
+                actuators[2].move_Abs(x2)
+                actuators[3].move_Abs(y2)
 
     def manual_move(self):
-        x = self.x_pos.value()
-        y = self.y_pos.value()
+        x1 = self.x1_pos.value()
+        y1 = self.y1_pos.value()
+        x2 = self.x2_pos.value()
+        y2 = self.y2_pos.value()
         actuators = self.modules_manager.actuators
+
         if len(actuators) == 0:
             popup_message('No actuator', 'Select XY actuators first!')
         else:
-            actuators[0].move_Abs(x)
-            actuators[1].move_Abs(y)
+            actuators[0].move_Abs(x1)
+            actuators[1].move_Abs(y1)
+            actuators[2].move_Abs(x1)
+            actuators[3].move_Abs(y2)
 
     def change_refresh_time(self, time):
         self.killTimer(self.timerPos)
@@ -402,18 +456,27 @@ class Manipulator(gutils.CustomApp):
         actuators = self.modules_manager.actuators
         if len(actuators) > 0:
             x = actuators[0].current_position
-            self.x_pos.setValue(x)
+            self.x1_pos.setValue(x)
         if len(actuators) > 1:
             y = actuators[1].current_position
-            self.y_pos.setValue(y)
-            self.spots[0]['pos'] = [x ,y]
-            self.scatter.setData(self.spots)
+            self.y1_pos.setValue(y)
+        if len(actuators) > 2:
+            x2 = actuators[2].current_position
+            self.x2_pos.setValue(x2)
+        if len(actuators) > 3:
+            y2 = actuators[3].current_position
+            self.y2_pos.setValue(y2)
+
+        self.spots[0]['pos'] = [x, y]
+        self.spots[1]['pos'] = [x2, y2]
+        self.scatter.setData(self.spots)
 
     def listenToKeyboard(self, enable):
         if enable:
             # on_press returns a hook that can be used to "disconnect" the callback
             # function later, if required
             self.hook = keyboard.on_press(self.keyboardEventReceived)
+            self.plot.setFocus()
         else:
             keyboard.unhook(self.hook)
 
